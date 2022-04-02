@@ -2,3 +2,5 @@
 bindings-gtk3/backup/
 
 *.compiled
+
+backup/
