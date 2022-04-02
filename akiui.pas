@@ -36,11 +36,12 @@ type
   TSignalCallback = procedure (Sender: TAObject) of object;
 
 
+  { Class to add multiple callbacks to one event }
   TASignal = class
   strict private
-    { być moze dodać też listy of procedure is nested
-      https://www.freepascal.org/docs-html/ref/refse17.html
-    }
+    { Maybe here should be also list for procedure is nested and simple
+      procedures, to cover all possibilities:
+      https://www.freepascal.org/docs-html/ref/refse17.html }
     FEventCallbackList: TProcedureOfObjectList;
 
   public
