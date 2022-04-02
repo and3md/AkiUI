@@ -131,6 +131,8 @@ end;
 
 function TSignal.Count: Integer;
 begin
+  if FEventCallbackList = nil then
+    Exit(0);
   Result := FEventCallbackList.Count;
 end;
 
@@ -141,12 +143,14 @@ end;
 
 procedure TSignal.AddCallback(SignalCallback: TSignalCallback);
 begin
+  if FEventCallbackList = nil then
+    FEventCallbackList := TProcedureOfObjectList.Create;
   FEventCallbackList.Add(TProcedureOfObject(SignalCallback));
 end;
 
 constructor TSignal.Create;
 begin
-  FEventCallbackList := TProcedureOfObjectList.Create;
+
 end;
 
 destructor TSignal.Destroy;
