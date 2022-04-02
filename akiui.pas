@@ -36,7 +36,7 @@ type
   TSignalCallback = procedure (Sender: TAObject) of object;
 
 
-  TSignal = class
+  TASignal = class
   strict private
     { być moze dodać też listy of procedure is nested
       https://www.freepascal.org/docs-html/ref/refse17.html
@@ -57,8 +57,8 @@ type
     FWindows: TAWindowList;
     FMainWindow: TAWindow;
 
-    { Zawsze jest klasa TSignal i odpowiadająca funkcja }
-    FOnActivateSignal: TSignal;
+    { Zawsze jest klasa TASignal i odpowiadająca funkcja }
+    FOnActivateSignal: TASignal;
     procedure ActivateSignal;
   public
     constructor Create(const AppID: String);
@@ -70,7 +70,7 @@ type
     property MainWindow: TAWindow read FMainWindow write FMainWindow;
 
     // signals
-    property OnActivate: TSignal read FOnActivateSignal;
+    property OnActivate: TASignal read FOnActivateSignal;
 
   end;
 
@@ -90,7 +90,7 @@ type
   private
     FGtkWindow: PGtkWidget;
 
-    FOnDestroySignal: TSignal;
+    FOnDestroySignal: TASignal;
     procedure InitBackend;
 
     procedure DestroySignal;
@@ -103,7 +103,7 @@ type
     procedure RemoveWidget(Widget: TAWidget);
 
     property Application: TAApplication read FApplication;
-    property OnDestroy: TSignal read FOnDestroySignal;
+    property OnDestroy: TASignal read FOnDestroySignal;
   end;
 
   { Base class for all widgets }
@@ -113,7 +113,7 @@ type
     FInitializedBackend: Boolean;
     FDestroySignalID: gulong;
   private
-    FOnDestroySignal: TSignal;
+    FOnDestroySignal: TASignal;
     procedure DestroySignal;
   protected
     FGtkWidget: PGtkWidget;
@@ -128,7 +128,7 @@ type
     property InitializedBackend: Boolean read FInitializedBackend;
     property Parent: TAObject read FParent;
 
-    property OnDestroy: TSignal read FOnDestroySignal;
+    property OnDestroy: TASignal read FOnDestroySignal;
   end;
 
   { Simple button class }
@@ -137,7 +137,7 @@ type
     FTitle: String;
 
   private
-    FOnClickedSignal: TSignal;
+    FOnClickedSignal: TASignal;
     procedure ClickedSignal;
   protected
     procedure InitBackend; override;
@@ -145,7 +145,7 @@ type
     constructor Create(const ATitle: String);
     destructor Destroy; override;
 
-    property OnClicked: TSignal read FOnClickedSignal;
+    property OnClicked: TASignal read FOnClickedSignal;
   end;
 
 var
@@ -186,7 +186,7 @@ end;
 constructor TAButton.Create(const ATitle: String);
 begin
   FTitle := ATitle;
-  FOnClickedSignal := TSignal.Create;
+  FOnClickedSignal := TASignal.Create;
 end;
 
 destructor TAButton.Destroy;
@@ -241,7 +241,7 @@ end;
 
 constructor TAWidget.Create;
 begin
-  FOnDestroySignal := TSignal.Create;
+  FOnDestroySignal := TASignal.Create;
 end;
 
 destructor TAWidget.Destroy;
@@ -255,28 +255,28 @@ begin
   inherited Destroy;
 end;
 
-{ TSignal }
+{ TASignal }
 
-function TSignal.Count: Integer;
+function TASignal.Count: Integer;
 begin
   if FEventCallbackList = nil then
     Exit(0);
   Result := FEventCallbackList.Count;
 end;
 
-function TSignal.GetCallbackByIndex(Index: Integer): TSignalCallback;
+function TASignal.GetCallbackByIndex(Index: Integer): TSignalCallback;
 begin
   Result := TSignalCallback(FEventCallbackList[Index]);
 end;
 
-procedure TSignal.AddCallback(SignalCallback: TSignalCallback);
+procedure TASignal.AddCallback(SignalCallback: TSignalCallback);
 begin
   if FEventCallbackList = nil then
     FEventCallbackList := TProcedureOfObjectList.Create;
   FEventCallbackList.Add(TProcedureOfObject(SignalCallback));
 end;
 
-destructor TSignal.Destroy;
+destructor TASignal.Destroy;
 begin
   FreeAndNil(FEventCallbackList);
   inherited Destroy;
@@ -308,7 +308,7 @@ begin
     exPrecision, exUnderflow, exZeroDivide]);
   FGtkApp := gtk_application_new(Pgchar(AppID), G_APPLICATION_FLAGS_NONE);
   FWindows := TAWindowList.Create;
-  FOnActivateSignal := TSignal.Create;
+  FOnActivateSignal := TASignal.Create;
 end;
 
 destructor TAApplication.Destroy;
@@ -392,7 +392,7 @@ begin
   FTitle := ATitle;
   FWidth := ADefaultWidth;
   FHeight := ADefaultHeight;
-  FOnDestroySignal := TSignal.Create;
+  FOnDestroySignal := TASignal.Create;
   FApplication := Application;
   FApplication.FWindows.Add(Self);
   FWidgetList := TAWidgetList.Create;
