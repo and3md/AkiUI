@@ -8,6 +8,9 @@ uses
   Classes, SysUtils, Math, Generics.Collections,
   Gtk3, Gdk3, GdkPixbuf2, GObject2, Gio2, Glib2;
 
+const
+  DefaultSpacing = 2;
+
 type
 
   TAWindow = class;
@@ -58,7 +61,7 @@ type
     FWindows: TAWindowList;
     FMainWindow: TAWindow;
 
-    { Zawsze jest klasa TASignal i odpowiadająca funkcja }
+    { There is always a class and a corresponding function. }
     FOnActivateSignal: TASignal;
     procedure ActivateSignal;
   public
@@ -70,7 +73,7 @@ type
     { Window that will be created in ActivateSignal }
     property MainWindow: TAWindow read FMainWindow write FMainWindow;
 
-    // signals
+    { signals }
     property OnActivate: TASignal read FOnActivateSignal;
 
   end;
@@ -132,6 +135,43 @@ type
     property OnDestroy: TASignal read FOnDestroySignal;
   end;
 
+  TAOrientation = (
+    oHorizontal = 0,
+    oVertical = 1
+  );
+
+  { Box item with placing data }
+  TABoxItem = class
+    Widget: TAWidget;
+    Expand: Boolean;
+    Fill: Boolean;
+    Padding: Integer;
+
+    { Parameters from https://docs.gtk.org/gtk3/method.Box.pack_start.html }
+    constructor Create(const AWidget: TAWidget; const AExpand, AFill: Boolean;
+      const APadding: Integer);
+  end;
+
+  TABoxItemList = specialize TList <TABoxItem>;
+
+  TABox = class (TAWidget)
+  strict private
+    FBoxItemList: TABoxItemList;
+    FOrientation: TAOrientation;
+    FSpacing: Integer;
+  protected
+    procedure InitBackend; override;
+    procedure InitItemInBackend(const ABoxItem: TABoxItem);
+  public
+    constructor Create(const AOrientation: TAOrientation);
+    destructor Destroy; override;
+
+    { Parameters from https://docs.gtk.org/gtk3/method.Box.pack_start.html }
+    procedure AddWidget(const AWidget: TAWidget; const AExpand, AFill: Boolean;
+      const APadding: Integer);
+
+  end;
+
   { Simple button class }
   TAButton = class (TAWidget)
   strict private
@@ -154,6 +194,75 @@ var
 
 
 implementation
+
+{ TABoxItem }
+
+constructor TABoxItem.Create(const AWidget: TAWidget; const AExpand,
+  AFill: Boolean; const APadding: Integer);
+begin
+  Widget := AWidget;
+  Expand := AExpand;
+  Fill := AFill;
+  Padding := APadding;
+end;
+
+{ TABox }
+
+procedure TABox.InitBackend;
+var
+  I: Integer;
+begin
+  if InitializedBackend then
+    Exit;
+
+  FGtkWidget := gtk_box_new(Integer(FOrientation), FSpacing);
+
+  for I := 0 to FBoxItemList.Count - 1 do
+    InitItemInBackend(FBoxItemList[I]);
+
+  inherited InitBackend;
+end;
+
+procedure TABox.InitItemInBackend(const ABoxItem: TABoxItem);
+begin
+  ABoxItem.Widget.InitBackend;
+  gtk_box_pack_start(PGtkBox(FGtkWidget),
+    ABoxItem.Widget.FGtkWidget,
+    GBoolean(ABoxItem.Expand),
+    GBoolean(ABoxItem.Fill),
+    ABoxItem.Padding
+  );
+end;
+
+constructor TABox.Create(const AOrientation: TAOrientation);
+begin
+  inherited Create;
+  FBoxItemList := TABoxItemList.Create;
+  FOrientation := AOrientation;
+  FSpacing := DefaultSpacing;
+end;
+
+destructor TABox.Destroy;
+var
+  I: Integer;
+begin
+  for I := 0 to FBoxItemList.Count -1 do
+    FBoxItemList[I].Free;
+  FreeAndNil(FBoxItemList);
+  inherited Destroy;
+end;
+
+procedure TABox.AddWidget(const AWidget: TAWidget; const AExpand, AFill: Boolean;
+      const APadding: Integer);
+var
+  BoxItem: TABoxItem;
+begin
+  BoxItem := TABoxItem.Create(AWidget, AExpand, AFill, APadding);
+  FBoxItemList.Add(BoxItem);
+  if InitializedBackend then
+    InitItemInBackend(BoxItem);
+end;
+
 
 { TAButton }
 
@@ -186,6 +295,7 @@ end;
 
 constructor TAButton.Create(const ATitle: String);
 begin
+  inherited Create;
   FTitle := ATitle;
   FOnClickedSignal := TASignal.Create;
 end;
@@ -214,6 +324,7 @@ var
   Window: TAWindow;
 begin
   Widget := TAWidget(UserData);
+  Writeln('destroy_TAWidget ' + Widget.ClassName);
   Widget.DestroySignal;
 
   if Widget.Parent is TAWindow then
@@ -222,7 +333,7 @@ begin
     Window.RemoveWidget(Widget);
   end;
 
-  Window.FGtkWindow := nil; // do not try destroy it in destructor
+  Widget.FGtkWidget := nil; // do not try destroy it in destructor
   FreeAndNil(Widget);
   Writeln('Widget destroyed.');
 end;
@@ -242,17 +353,20 @@ end;
 
 constructor TAWidget.Create;
 begin
+  inherited Create;
   FOnDestroySignal := TASignal.Create;
 end;
 
 destructor TAWidget.Destroy;
 begin
-  if (FGTKWidget <> nil) then
+  if InitializedBackend then
   begin
     g_signal_handler_disconnect(FGTKWidget, FDestroySignalID);
     gtk_widget_destroy(FGTKWidget);
     Writeln('Widget destroyed 2.');
+    FInitializedBackend := false;
   end;
+  FreeAndNil(FOnDestroySignal);
   inherited Destroy;
 end;
 
