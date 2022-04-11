@@ -195,11 +195,42 @@ type
     property OnClicked: TASignal read FOnClickedSignal;
   end;
 
+
+  TALabel = class (TAWidget)
+  strict private
+    FTitle: String;
+
+  protected
+    procedure InitBackend; override;
+
+  public
+    constructor Create(const ATitle: String);
+
+  end;
+
 var
   Application: TAApplication;
 
 
 implementation
+
+{ TALabel }
+
+procedure TALabel.InitBackend;
+begin
+  if InitializedBackend then
+    Exit;
+
+  FGtkWidget := gtk_label_new(Pgchar(FTitle));
+  { Should be always last in InitBackend }
+  inherited InitBackend;
+end;
+
+constructor TALabel.Create(const ATitle: String);
+begin
+  inherited Create;
+  FTitle := ATitle;
+end;
 
 { TABoxItem }
 
