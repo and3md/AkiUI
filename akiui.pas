@@ -128,6 +128,7 @@ type
     constructor Create;
     destructor Destroy; override;
 
+    procedure BeforeDestruction; override;
 
     property InitializedBackend: Boolean read FInitializedBackend;
     property Parent: TAObject read FParent;
@@ -166,9 +167,14 @@ type
     constructor Create(const AOrientation: TAOrientation);
     destructor Destroy; override;
 
+    procedure BeforeDestruction; override;
+
     { Parameters from https://docs.gtk.org/gtk3/method.Box.pack_start.html }
     procedure AddWidget(const AWidget: TAWidget; const AExpand, AFill: Boolean;
       const APadding: Integer);
+
+    { Removes widget but not destroys it }
+    procedure RemoveWidget(const AWidget: TAWidget);
 
   end;
 
@@ -243,13 +249,23 @@ begin
 end;
 
 destructor TABox.Destroy;
+begin
+  { Items are removed in before destruction. }
+  FreeAndNil(FBoxItemList);
+  inherited Destroy;
+end;
+
+procedure TABox.BeforeDestruction;
 var
   I: Integer;
 begin
+  inherited BeforeDestruction;
+
   for I := 0 to FBoxItemList.Count -1 do
+  begin
+    FBoxItemList[I].Widget.Free;
     FBoxItemList[I].Free;
-  FreeAndNil(FBoxItemList);
-  inherited Destroy;
+  end;
 end;
 
 procedure TABox.AddWidget(const AWidget: TAWidget; const AExpand, AFill: Boolean;
@@ -258,9 +274,27 @@ var
   BoxItem: TABoxItem;
 begin
   BoxItem := TABoxItem.Create(AWidget, AExpand, AFill, APadding);
+  AWidget.FParent := Self;
   FBoxItemList.Add(BoxItem);
   if InitializedBackend then
     InitItemInBackend(BoxItem);
+end;
+
+procedure TABox.RemoveWidget(const AWidget: TAWidget);
+var
+  I: Integer;
+  BoxItem: TABoxItem;
+begin
+  for I := 0 to FBoxItemList.Count - 1 do
+  begin
+    BoxItem := FBoxItemList[I];
+    if BoxItem.Widget = AWidget then
+    begin
+      FBoxItemList.Delete(I);
+      BoxItem.Free;
+      break;
+    end;
+  end;
 end;
 
 
@@ -286,6 +320,9 @@ end;
 
 procedure TAButton.InitBackend;
 begin
+  if InitializedBackend then
+    Exit;
+
   FGtkWidget := gtk_button_new_with_label(Pgchar(FTitle));
   g_signal_connect_data(FGtkWidget, 'clicked', TGCallback(@clicked_TAButton), Self, nil, 0);
 
@@ -325,12 +362,18 @@ var
 begin
   Widget := TAWidget(UserData);
   Writeln('destroy_TAWidget ' + Widget.ClassName);
+  { TODO: check should DestroySignal be called here or only in BeforeDestruction }
   Widget.DestroySignal;
 
   if Widget.Parent is TAWindow then
   begin
     Window := TAWindow(Widget.Parent);
     Window.RemoveWidget(Widget);
+  end;
+
+  if Widget.Parent is TABox then
+  begin
+    TABox(Widget.Parent).RemoveWidget(Widget);
   end;
 
   Widget.FGtkWidget := nil; // do not try destroy it in destructor
@@ -346,6 +389,7 @@ begin
   if FGtkWidget <> nil then
   begin
     FDestroySignalID := g_signal_connect_data(FGtkWidget, 'destroy', TGCallback(@destroy_TAWidget), Self, nil, 0);
+    //g_signal_handler_disconnect(FGTKWidget, FDestroySignalID);
     FInitializedBackend := true;
   end else
     Writeln('Widget not initialized correctly. Maybe missed inherited that should be on end.');
@@ -359,6 +403,8 @@ end;
 
 destructor TAWidget.Destroy;
 begin
+  Writeln('Destroy ' + ClassName);
+
   if InitializedBackend then
   begin
     g_signal_handler_disconnect(FGTKWidget, FDestroySignalID);
@@ -366,8 +412,16 @@ begin
     Writeln('Widget destroyed 2.');
     FInitializedBackend := false;
   end;
+
   FreeAndNil(FOnDestroySignal);
   inherited Destroy;
+end;
+
+procedure TAWidget.BeforeDestruction;
+begin
+  inherited BeforeDestruction;
+
+  DestroySignal;
 end;
 
 { TASignal }
@@ -518,7 +572,10 @@ var
   I: Integer;
 begin
   for I := 0 to FWidgetList.Count - 1 do
-    FWidgetList[i].Free;
+  begin
+    Writeln('TAWindow: Destroy widget at index: ' + IntToStr(I));
+    FWidgetList[I].Free;
+  end;
   FreeAndNil(FWidgetList);
 
   FreeAndNil(FOnDestroySignal);
