@@ -318,7 +318,7 @@ procedure TABox.RemoveWidget(const AWidget: TAWidget);
 var
   I: Integer;
 begin
-  for I := 0 to FWidgetList.Count - 1 do
+  for I := FWidgetList.Count - 1 downto 0 do
   begin
     if FWidgetList[I] = AWidget then
     begin
