@@ -94,7 +94,7 @@ type
     FTitle: String;
     FWidth: Integer;
     FHeight: Integer;
-    FWidgetList: TAWidgetList;
+    FChildWidget: TAWidget;
   private
     FGtkWindow: PGtkWidget;
 
@@ -111,8 +111,7 @@ type
     { TODO: Destroying window from code do not remove gtk4 objects }
     destructor Destroy; override;
 
-    procedure AddWidget(Widget: TAWidget);
-    procedure RemoveWidget(Widget: TAWidget);
+    procedure SetChild(Widget: TAWidget);
 
     property Title: String read FTitle;
 
@@ -167,21 +166,20 @@ type
 
   TABox = class (TAWidget)
   strict private
-    FBoxItemList: TABoxItemList;
+    FWidgetList: TAWidgetList;
     FOrientation: TAOrientation;
     FSpacing: Integer;
   protected
     procedure InitBackend; override;
-    procedure InitItemInBackend(const ABoxItem: TABoxItem);
+    procedure InitItemInBackend(const AWidget: TAWidget);
   public
     constructor Create(const AOrientation: TAOrientation);
     destructor Destroy; override;
 
     procedure BeforeDestruction; override;
 
-    { Parameters from https://docs.gtk.org/gtk3/method.Box.pack_start.html }
-    procedure AddWidget(const AWidget: TAWidget; const AExpand, AFill: Boolean;
-      const APadding: Integer);
+    { Parameters from  }
+    procedure AddWidget(const AWidget: TAWidget);
 
     { Removes widget but not destroys it }
     procedure RemoveWidget(const AWidget: TAWidget);
@@ -264,27 +262,24 @@ begin
 
   FGtkWidget := gtk_box_new(Integer(FOrientation), FSpacing);
 
-  for I := 0 to FBoxItemList.Count - 1 do
-    InitItemInBackend(FBoxItemList[I]);
+  for I := 0 to FWidgetList.Count - 1 do
+    InitItemInBackend(FWidgetList[I]);
 
   inherited InitBackend;
 end;
 
-procedure TABox.InitItemInBackend(const ABoxItem: TABoxItem);
+procedure TABox.InitItemInBackend(const AWidget: TAWidget);
 begin
-  ABoxItem.Widget.InitBackend;
-{  gtk_box_pack_start(PGtkBox(FGtkWidget),
-    ABoxItem.Widget.FGtkWidget,
-    GBoolean(ABoxItem.Expand),
-    GBoolean(ABoxItem.Fill),
-    ABoxItem.Padding
-  );}
+  if not AWidget.InitializedBackend then
+    AWidget.InitBackend;
+
+  gtk_box_append(PGtkBox(FGtkWidget), AWidget.FGtkWidget);
 end;
 
 constructor TABox.Create(const AOrientation: TAOrientation);
 begin
   inherited Create;
-  FBoxItemList := TABoxItemList.Create;
+  FWidgetList := TAWidgetList.Create;
   FOrientation := AOrientation;
   FSpacing := DefaultSpacing;
 end;
@@ -292,7 +287,7 @@ end;
 destructor TABox.Destroy;
 begin
   { Items are removed in before destruction. }
-  FreeAndNil(FBoxItemList);
+  FreeAndNil(FWidgetList);
   inherited Destroy;
 end;
 
@@ -302,38 +297,30 @@ var
 begin
   inherited BeforeDestruction;
 
-  for I := 0 to FBoxItemList.Count -1 do
+  for I := 0 to FWidgetList.Count -1 do
   begin
-    FBoxItemList[I].Widget.Free;
-    FBoxItemList[I].Free;
+    FWidgetList[I].Free;
   end;
 end;
 
-procedure TABox.AddWidget(const AWidget: TAWidget; const AExpand, AFill: Boolean;
-      const APadding: Integer);
-var
-  BoxItem: TABoxItem;
+procedure TABox.AddWidget(const AWidget: TAWidget);
 begin
-  BoxItem := TABoxItem.Create(AWidget, AExpand, AFill, APadding);
   AWidget.FParent := Self;
-  FBoxItemList.Add(BoxItem);
+  FWidgetList.Add(AWidget);
   if InitializedBackend then
-    InitItemInBackend(BoxItem);
+    InitItemInBackend(AWidget);
 end;
 
 procedure TABox.RemoveWidget(const AWidget: TAWidget);
 var
   I: Integer;
-  BoxItem: TABoxItem;
 begin
-  for I := 0 to FBoxItemList.Count - 1 do
+  for I := 0 to FWidgetList.Count - 1 do
   begin
-    BoxItem := FBoxItemList[I];
-    if BoxItem.Widget = AWidget then
+    if FWidgetList[I] = AWidget then
     begin
-      FBoxItemList.Delete(I);
-      BoxItem.Free;
-      break;
+      FWidgetList.Delete(I);
+      gtk_box_remove(PGtkBox(FGtkWidget), AWidget.FGtkWidget);
     end;
   end;
 end;
@@ -409,7 +396,7 @@ begin
   if Widget.Parent is TAWindow then
   begin
     Window := TAWindow(Widget.Parent);
-    Window.RemoveWidget(Widget);
+    Window.SetChild(nil);
   end;
 
   if Widget.Parent is TABox then
@@ -614,43 +601,36 @@ begin
   FOnDestroySignal := TASignal.Create;
   FApplication := Application;
   FApplication.FWindows.Add(Self);
-  FWidgetList := TAWidgetList.Create;
 end;
 
 destructor TAWindow.Destroy;
-var
-  I: Integer;
 begin
-  for I := 0 to FWidgetList.Count - 1 do
+  if FChildWidget <> nil then
   begin
-    Writeln('TAWindow: Destroy widget at index: ' + IntToStr(I));
-    FWidgetList[I].Free;
+    Writeln('TAWindow: Destroy child widget in TAWindow.Destroy');
+    FreeAndNil(FChildWidget);
   end;
-  FreeAndNil(FWidgetList);
 
   FreeAndNil(FOnDestroySignal);
   inherited Destroy;
 end;
 
-procedure TAWindow.AddWidget(Widget: TAWidget);
+procedure TAWindow.SetChild(Widget: TAWidget);
 begin
-  FWidgetList.Add(Widget);
-  Widget.FParent := Self;
+  if FChildWidget <> nil then
+  begin
+    gtk_window_set_child(PGtkWindow(FGtkWindow), nil);
+    FreeAndNil(FChildWidget);
+  end;
+  FChildWidget := Widget;
+  if FChildWidget = nil then
+     Exit;
+  FChildWidget.FParent := Self;
   if FState = wsInitializedBackend then
   begin
-    Widget.InitBackend;
-    //gtk_container_add(PGtkContainer(FGtkWindow), Widget.FGtkWidget);
+    FChildWidget.InitBackend;
+    gtk_window_set_child(PGtkWindow(FGtkWindow), FChildWidget.FGtkWidget);
   end;
-
-
-end;
-
-procedure TAWindow.RemoveWidget(Widget: TAWidget);
-begin
-  Assert(Widget.FParent = Self, 'Trying remove widget with other Parent.');
-
-  FWidgetList.Remove(Widget);
-  Widget.FParent := nil;
 end;
 
 
