@@ -87,6 +87,8 @@ type
     wsInitializedBackend
   );
 
+  { TAWindow }
+
   TAWindow = class (TAObject)
   strict private
     FApplication: TAApplication;
@@ -112,6 +114,8 @@ type
     destructor Destroy; override;
 
     procedure SetChild(Widget: TAWidget);
+
+    procedure Show;
 
     property Title: String read FTitle;
 
@@ -270,8 +274,7 @@ end;
 
 procedure TABox.InitItemInBackend(const AWidget: TAWidget);
 begin
-  if not AWidget.InitializedBackend then
-    AWidget.InitBackend;
+  AWidget.InitBackend;
 
   gtk_box_append(PGtkBox(FGtkWidget), AWidget.FGtkWidget);
 end;
@@ -406,6 +409,7 @@ begin
 
   Widget.FGtkWidget := nil; // do not try destroy it in destructor
   FreeAndNil(Widget);
+
   Writeln('Widget destroyed.');
 end;
 
@@ -433,12 +437,16 @@ destructor TAWidget.Destroy;
 begin
   Writeln('Destroy ' + ClassName);
 
+  { When we are here from widget destroy signal we do not need to destroy it }
+  if FGtkWidget = nil then
+    FInitializedBackend := false;
+
   if InitializedBackend then
   begin
     g_signal_handler_disconnect(FGTKWidget, FDestroySignalID);
+    g_object_unref(FGTKWidget);
     //gtk_widget_destroy(FGTKWidget);
     Writeln('Widget destroyed 2.');
-    FInitializedBackend := false;
   end;
 
   FreeAndNil(FOnDestroySignal);
@@ -575,13 +583,19 @@ begin
     gtk_window_set_default_size(PGtkWindow(FGtkWindow), FWidth, FHeight);
     g_signal_connect_data(FGtkWindow, 'destroy', TGCallback(@destroy_TAWindow), Self, nil, 0);
 
-    gtk_widget_show(FGtkWindow);
+    if FChildWidget <> nil then
+    begin
+      FChildWidget.InitBackend;
+
+      gtk_window_set_child(PGtkWindow(FGtkWindow), FChildWidget.FGtkWidget);
+    end;
     { add children widgets }
 {    for I := 0 to FWidgetList.Count -1 do
     begin
       FWidgetList[I].InitBackend;
       //gtk_container_add(PGtkContainer(FGtkWindow), FWidgetList[I].FGtkWidget);
     end;}
+    gtk_widget_show(FGtkWindow);
 
     FState := wsInitializedBackend;
   end;
@@ -617,7 +631,7 @@ end;
 
 procedure TAWindow.SetChild(Widget: TAWidget);
 begin
-  if FChildWidget <> nil then
+  if (FChildWidget <> nil) and (Widget <> nil) then
   begin
     gtk_window_set_child(PGtkWindow(FGtkWindow), nil);
     FreeAndNil(FChildWidget);
@@ -631,6 +645,12 @@ begin
     FChildWidget.InitBackend;
     gtk_window_set_child(PGtkWindow(FGtkWindow), FChildWidget.FGtkWidget);
   end;
+end;
+
+procedure TAWindow.Show;
+begin
+  if FState = wsInitializedBackend then
+     gtk_widget_show(FGtkWindow);
 end;
 
 
