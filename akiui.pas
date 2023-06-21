@@ -19,6 +19,7 @@ type
   TAWindowList = specialize TList<TAWindow>;
   TAWidgetList = specialize TList<TAWidget>;
 
+  { Aki UI object with some user data fields }
   TAObject = class
   strict protected
     FData: Pointer;
@@ -36,7 +37,7 @@ type
 
   TProcedureOfObject = procedure of object;
   TProcedureOfObjectList = specialize TList <TProcedureOfObject>;
-  TSignalCallback = procedure (Sender: TAObject) of object;
+  TSignalCallback = procedure (const Sender: TAObject) of object;
 
 
   { Class to add multiple callbacks to one event }
@@ -51,6 +52,9 @@ type
     function Count: Integer;
     function GetCallbackByIndex(Index: Integer): TSignalCallback;
     procedure AddCallback(SignalCallback: TSignalCallback);
+
+    { Call all calbacks in this TASignal }
+    procedure CallAllCallbacks(const Sender: TAObject);
 
     destructor Destroy; override;
   end;
@@ -95,16 +99,22 @@ type
     FGtkWindow: PGtkWidget;
 
     FOnDestroySignal: TASignal;
+
+    { Creates gtk objects and sets its properties }
     procedure InitBackend;
 
     procedure DestroySignal;
   public
     constructor Create(Application:TAApplication; const ATitle: String; const ADefaultWidth,
       ADefaultHeight: Integer);
+
+    { TODO: Destroying window from code do not remove gtk4 objects }
     destructor Destroy; override;
 
     procedure AddWidget(Widget: TAWidget);
     procedure RemoveWidget(Widget: TAWidget);
+
+    property Title: String read FTitle;
 
     property Application: TAApplication read FApplication;
     property OnDestroy: TASignal read FOnDestroySignal;
@@ -476,6 +486,14 @@ begin
   FEventCallbackList.Add(TProcedureOfObject(SignalCallback));
 end;
 
+procedure TASignal.CallAllCallbacks(const Sender: TAObject);
+var
+  I: Integer;
+begin
+  for I := 0 to Count - 1 do
+    GetCallbackByIndex(I)(Sender);
+end;
+
 destructor TASignal.Destroy;
 begin
   FreeAndNil(FEventCallbackList);
@@ -513,13 +531,17 @@ end;
 
 destructor TAApplication.Destroy;
 begin
+  Writeln('FreeAndNil(FWindows) - START');
+  { All windows are destroyed in destroy_TAWindow() }
   FreeAndNil(FWindows);
+  Writeln('FreeAndNil(FWindows) - STOP');
   FreeAndNil(FOnActivateSignal);
   g_object_unref(FGtkApp);
+  Writeln('TAApplication.Destroy');
   inherited;
 end;
 
-{ Funkcja obsługi sygnału aktywacji aplikacji. }
+{ Function for support apliaction activation }
 procedure activate_TAApplication(GtkApp: PGtkApplication; UserData: GPointer); cdecl;
 var
   App: TAApplication;
@@ -550,8 +572,9 @@ begin
   if Window.Application.MainWindow = Window then
     Window.Application.MainWindow := nil;
 
+  Writeln('Window ' + Window.Title + ' destroy - START');
   FreeAndNil(Window);
-  Writeln('Window destroyed.');
+  Writeln('Window destroy.');
 end;
 
 procedure TAWindow.InitBackend;
@@ -578,13 +601,8 @@ begin
 end;
 
 procedure TAWindow.DestroySignal;
-var
-  I: Integer;
 begin
-  for I := 0 to FOnDestroySignal.Count -1 do
-  begin
-    FOnDestroySignal.GetCallbackByIndex(i)(Self);
-  end;
+  FOnDestroySignal.CallAllCallbacks(Self);
 end;
 
 constructor TAWindow.Create(Application:TAApplication; const ATitle: String; const ADefaultWidth,
