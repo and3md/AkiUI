@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, Math, Generics.Collections,
-  Gtk3, Gdk3, GdkPixbuf2, GObject2, Gio2, Glib2;
+  Gtk4, Gdk4, GdkPixbuf2, GObject2, Gio2, Glib2;
 
 const
   DefaultSpacing = 2;
@@ -263,12 +263,12 @@ end;
 procedure TABox.InitItemInBackend(const ABoxItem: TABoxItem);
 begin
   ABoxItem.Widget.InitBackend;
-  gtk_box_pack_start(PGtkBox(FGtkWidget),
+{  gtk_box_pack_start(PGtkBox(FGtkWidget),
     ABoxItem.Widget.FGtkWidget,
     GBoolean(ABoxItem.Expand),
     GBoolean(ABoxItem.Fill),
     ABoxItem.Padding
-  );
+  );}
 end;
 
 constructor TABox.Create(const AOrientation: TAOrientation);
@@ -439,7 +439,7 @@ begin
   if InitializedBackend then
   begin
     g_signal_handler_disconnect(FGTKWidget, FDestroySignalID);
-    gtk_widget_destroy(FGTKWidget);
+    //gtk_widget_destroy(FGTKWidget);
     Writeln('Widget destroyed 2.');
     FInitializedBackend := false;
   end;
@@ -492,7 +492,7 @@ begin
   if FMainWindow <> nil then
   begin
     FMainWindow.InitBackend;
-    gtk_widget_show_all(FMainWindow.FGtkWindow);
+    //gtk_widget_show_all(FMainWindow.FGtkWindow);
   end;
 
   { Other functions from signals }
@@ -565,12 +565,13 @@ begin
     gtk_window_set_default_size(PGtkWindow(FGtkWindow), FWidth, FHeight);
     g_signal_connect_data(FGtkWindow, 'destroy', TGCallback(@destroy_TAWindow), Self, nil, 0);
 
+    gtk_widget_show(FGtkWindow);
     { add children widgets }
-    for I := 0 to FWidgetList.Count -1 do
+{    for I := 0 to FWidgetList.Count -1 do
     begin
       FWidgetList[I].InitBackend;
-      gtk_container_add(PGtkContainer(FGtkWindow), FWidgetList[I].FGtkWidget);
-    end;
+      //gtk_container_add(PGtkContainer(FGtkWindow), FWidgetList[I].FGtkWidget);
+    end;}
 
     FState := wsInitializedBackend;
   end;
@@ -620,7 +621,7 @@ begin
   if FState = wsInitializedBackend then
   begin
     Widget.InitBackend;
-    gtk_container_add(PGtkContainer(FGtkWindow), Widget.FGtkWidget);
+    //gtk_container_add(PGtkContainer(FGtkWindow), Widget.FGtkWidget);
   end;
 
 
