@@ -154,20 +154,6 @@ type
     oVertical = 1
   );
 
-  { Box item with placing data }
-  TABoxItem = class
-    Widget: TAWidget;
-    Expand: Boolean;
-    Fill: Boolean;
-    Padding: Integer;
-
-    { Parameters from https://docs.gtk.org/gtk3/method.Box.pack_start.html }
-    constructor Create(const AWidget: TAWidget; const AExpand, AFill: Boolean;
-      const APadding: Integer);
-  end;
-
-  TABoxItemList = specialize TList <TABoxItem>;
-
   TABox = class (TAWidget)
   strict private
     FWidgetList: TAWidgetList;
@@ -242,17 +228,6 @@ constructor TALabel.Create(const ATitle: String);
 begin
   inherited Create;
   FTitle := ATitle;
-end;
-
-{ TABoxItem }
-
-constructor TABoxItem.Create(const AWidget: TAWidget; const AExpand,
-  AFill: Boolean; const APadding: Integer);
-begin
-  Widget := AWidget;
-  Expand := AExpand;
-  Fill := AFill;
-  Padding := APadding;
 end;
 
 { TABox }
@@ -374,7 +349,7 @@ begin
   inherited Destroy;
 end;
 
-{ TAWidget }
+{ TAWidget -------------------------------------------------------------------- }
 
 procedure TAWidget.DestroySignal;
 var
