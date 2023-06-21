@@ -131,6 +131,8 @@ type
     FDestroySignalID: gulong;
   private
     FOnDestroySignal: TASignal;
+
+    { Signal sent when widget will be destroyed }
     procedure DestroySignal;
   protected
     FGtkWidget: PGtkWidget;
@@ -298,7 +300,13 @@ begin
     if FWidgetList[I] = AWidget then
     begin
       FWidgetList.Delete(I);
-      gtk_box_remove(PGtkBox(FGtkWidget), AWidget.FGtkWidget);
+      { When it is called from destroy signal we do not need to remove it from
+        box because it is removed at this stage }
+      if AWidget.FGtkWidget <> nil then
+         gtk_box_remove(PGtkBox(FGtkWidget), AWidget.FGtkWidget);
+
+      { We support only one time widget adding. }
+      break;
     end;
   end;
 end;
@@ -352,13 +360,8 @@ end;
 { TAWidget -------------------------------------------------------------------- }
 
 procedure TAWidget.DestroySignal;
-var
-  I: Integer;
 begin
-  for I := 0 to FOnDestroySignal.Count -1 do
-  begin
-    FOnDestroySignal.GetCallbackByIndex(i)(Self);
-  end;
+  FOnDestroySignal.CallAllCallbacks(Self);
 end;
 
 procedure destroy_TAWidget(GtkWidget: PGtkWidget; UserData: GPointer); cdecl;
@@ -369,7 +372,11 @@ begin
   Widget := TAWidget(UserData);
   Writeln('destroy_TAWidget ' + Widget.ClassName);
   { TODO: check should DestroySignal be called here or only in BeforeDestruction }
+  Writeln('Call Destroy signal at destroy_TAWidget()');
   Widget.DestroySignal;
+
+  Widget.FGtkWidget := nil; // do not try destroy it in destructor
+  { At this stage widget is not in box or window }
 
   if Widget.Parent is TAWindow then
   begin
@@ -382,7 +389,7 @@ begin
     TABox(Widget.Parent).RemoveWidget(Widget);
   end;
 
-  Widget.FGtkWidget := nil; // do not try destroy it in destructor
+
   FreeAndNil(Widget);
 
   Writeln('Widget destroyed.');
@@ -432,6 +439,7 @@ procedure TAWidget.BeforeDestruction;
 begin
   inherited BeforeDestruction;
 
+  Writeln('Call DestroySignal form TAWidget.BeforeDestruction().');
   DestroySignal;
 end;
 
