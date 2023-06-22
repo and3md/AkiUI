@@ -113,6 +113,8 @@ type
     { TODO: Destroying window from code do not remove gtk4 objects }
     destructor Destroy; override;
 
+    procedure BeforeDestruction; override;
+
     procedure SetChild(Widget: TAWidget);
 
     procedure Show;
@@ -280,7 +282,7 @@ var
 begin
   inherited BeforeDestruction;
 
-  for I := 0 to FWidgetList.Count -1 do
+  for I := 0 to FWidgetList.Count - 1 do
   begin
     FWidgetList[I].Free;
   end;
@@ -551,22 +553,17 @@ end;
 procedure destroy_TAWindow(GtkApp: PGtkWidget; UserData: GPointer); cdecl;
 var
   Window: TAWindow;
+  WindowTitle: String;
 begin
   Window := TAWindow(UserData);
-  Window.DestroySignal;
+  WindowTitle := Window.Title;
 
-  Window.Application.FWindows.Remove(Window);
-  if Window.Application.MainWindow = Window then
-    Window.Application.MainWindow := nil;
-
-  Writeln('Window ' + Window.Title + ' destroy - START');
+  Writeln('destroy_TAWindow() - ' + WindowTitle + ' - START');
   FreeAndNil(Window);
-  Writeln('Window destroy.');
+  Writeln('destroy_TAWindow() - ' + WindowTitle + ' - STOP');
 end;
 
 procedure TAWindow.InitBackend;
-var
-  I: Integer;
 begin
   if FState = wsNotInitialized then
   begin
@@ -581,12 +578,7 @@ begin
 
       gtk_window_set_child(PGtkWindow(FGtkWindow), FChildWidget.FGtkWidget);
     end;
-    { add children widgets }
-{    for I := 0 to FWidgetList.Count -1 do
-    begin
-      FWidgetList[I].InitBackend;
-      //gtk_container_add(PGtkContainer(FGtkWindow), FWidgetList[I].FGtkWidget);
-    end;}
+
     gtk_widget_show(FGtkWindow);
 
     FState := wsInitializedBackend;
@@ -611,14 +603,29 @@ end;
 
 destructor TAWindow.Destroy;
 begin
+  { Remove Child Widget if exsits. }
   if FChildWidget <> nil then
   begin
-    Writeln('TAWindow: Destroy child widget in TAWindow.Destroy');
+    Writeln('TAWindow.Destroy: Free and nil child widget - START');
     FreeAndNil(FChildWidget);
+    Writeln('TAWindow.Destroy: Free and nil child widget - STOP');
   end;
+
+  { Remove window from windows list }
+  Application.FWindows.Remove(Self);
+  if Application.MainWindow = Self then
+    Application.MainWindow := nil;
 
   FreeAndNil(FOnDestroySignal);
   inherited Destroy;
+end;
+
+procedure TAWindow.BeforeDestruction;
+begin
+  { It is here because we want to run that code before start window destroying }
+  DestroySignal;
+
+  inherited BeforeDestruction;
 end;
 
 procedure TAWindow.SetChild(Widget: TAWidget);
