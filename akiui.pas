@@ -127,10 +127,13 @@ type
   TAWidget = class (TAObject)
   strict private
     { Can be set only on InitBackend in this class }
-    FInitializedBackend: Boolean;
+    FBackendInitialized: Boolean;
     FDestroySignalID: gulong;
   private
     FOnDestroySignal: TASignal;
+
+    { Needed to disable backend initialization on destroy gtk signal }
+    procedure SetBackendUninitialized;
 
     { Signal sent when widget will be destroyed }
     procedure DestroySignal;
@@ -145,7 +148,7 @@ type
 
     procedure BeforeDestruction; override;
 
-    property InitializedBackend: Boolean read FInitializedBackend;
+    property BackendInitialized: Boolean read FBackendInitialized;
     property Parent: TAObject read FParent;
 
     property OnDestroy: TASignal read FOnDestroySignal;
@@ -218,7 +221,7 @@ implementation
 
 procedure TALabel.InitBackend;
 begin
-  if InitializedBackend then
+  if BackendInitialized then
     Exit;
 
   FGtkWidget := gtk_label_new(Pgchar(FTitle));
@@ -232,13 +235,13 @@ begin
   FTitle := ATitle;
 end;
 
-{ TABox }
+{ TABox ---------------------------------------------------------------------- }
 
 procedure TABox.InitBackend;
 var
   I: Integer;
 begin
-  if InitializedBackend then
+  if BackendInitialized then
     Exit;
 
   FGtkWidget := gtk_box_new(Integer(FOrientation), FSpacing);
@@ -287,7 +290,7 @@ procedure TABox.AddWidget(const AWidget: TAWidget);
 begin
   AWidget.FParent := Self;
   FWidgetList.Add(AWidget);
-  if InitializedBackend then
+  if BackendInitialized then
     InitItemInBackend(AWidget);
 end;
 
@@ -334,7 +337,7 @@ end;
 
 procedure TAButton.InitBackend;
 begin
-  if InitializedBackend then
+  if BackendInitialized then
     Exit;
 
   FGtkWidget := gtk_button_new_with_label(Pgchar(FTitle));
@@ -359,6 +362,12 @@ end;
 
 { TAWidget -------------------------------------------------------------------- }
 
+procedure TAWidget.SetBackendUninitialized;
+begin
+  FGtkWidget := nil;
+  FBackendInitialized := false;
+end;
+
 procedure TAWidget.DestroySignal;
 begin
   FOnDestroySignal.CallAllCallbacks(Self);
@@ -367,44 +376,30 @@ end;
 procedure destroy_TAWidget(GtkWidget: PGtkWidget; UserData: GPointer); cdecl;
 var
   Widget: TAWidget;
-  Window: TAWindow;
+  WidgetClassName: String;
 begin
   Widget := TAWidget(UserData);
-  Writeln('destroy_TAWidget ' + Widget.ClassName);
-  { TODO: check should DestroySignal be called here or only in BeforeDestruction }
-  Writeln('Call Destroy signal at destroy_TAWidget()');
-  Widget.DestroySignal;
+  WidgetClassName := Widget.ClassName;
+  Writeln('destroy_TAWidget ' + WidgetClassName + ' - START');
 
-  Widget.FGtkWidget := nil; // do not try destroy it in destructor
-  { At this stage widget is not in box or window }
-
-  if Widget.Parent is TAWindow then
-  begin
-    Window := TAWindow(Widget.Parent);
-    Window.SetChild(nil);
-  end;
-
-  if Widget.Parent is TABox then
-  begin
-    TABox(Widget.Parent).RemoveWidget(Widget);
-  end;
-
-
+  { Do not try destroy gtk widget in destructor because in that moment it is
+    dereferenced by gtk }
+  Widget.SetBackendUninitialized;
   FreeAndNil(Widget);
 
-  Writeln('Widget destroyed.');
+  Writeln('destroy_TAWidget ' + WidgetClassName + ' - STOP');
 end;
 
 procedure TAWidget.InitBackend;
 begin
-  if FInitializedBackend then
+  if FBackendInitialized then
     Exit;
 
   if FGtkWidget <> nil then
   begin
     FDestroySignalID := g_signal_connect_data(FGtkWidget, 'destroy', TGCallback(@destroy_TAWidget), Self, nil, 0);
     //g_signal_handler_disconnect(FGTKWidget, FDestroySignalID);
-    FInitializedBackend := true;
+    FBackendInitialized := true;
   end else
     Writeln('Widget not initialized correctly. Maybe missed inherited that should be on end.');
 end;
@@ -416,22 +411,35 @@ begin
 end;
 
 destructor TAWidget.Destroy;
+var
+  Window: TAWindow;
 begin
-  Writeln('Destroy ' + ClassName);
+  Writeln('Destroy ' + ClassName + ' - START');
+
+  { At this stage widget is not in box or window }
+  if Parent is TAWindow then
+  begin
+    Window := TAWindow(Parent);
+    Window.SetChild(nil);
+  end;
+
+  if Parent is TABox then
+  begin
+    TABox(Parent).RemoveWidget(Self);
+  end;
 
   { When we are here from widget destroy signal we do not need to destroy it }
-  if FGtkWidget = nil then
-    FInitializedBackend := false;
-
-  if InitializedBackend then
+  if BackendInitialized then
   begin
+    Writeln('Gtk uninitialize - START');
+
     g_signal_handler_disconnect(FGTKWidget, FDestroySignalID);
     g_object_unref(FGTKWidget);
-    //gtk_widget_destroy(FGTKWidget);
-    Writeln('Widget destroyed 2.');
+    Writeln('Gtk uninitialize - STOP');
   end;
 
   FreeAndNil(FOnDestroySignal);
+  Writeln('Destroy ' + ClassName + ' - STOP');
   inherited Destroy;
 end;
 
@@ -439,7 +447,8 @@ procedure TAWidget.BeforeDestruction;
 begin
   inherited BeforeDestruction;
 
-  Writeln('Call DestroySignal form TAWidget.BeforeDestruction().');
+  { This signal is emited here and not in Destory because we want all
+    widget fields be correct }
   DestroySignal;
 end;
 
