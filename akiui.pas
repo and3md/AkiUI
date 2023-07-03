@@ -210,7 +210,13 @@ type
 
   public
     constructor Create(const ATitle: String);
+  end;
 
+  { TAEntry }
+
+  TAEntry = class (TAWidget)
+  protected
+    procedure InitBackend; override;
   end;
 
 var
@@ -235,6 +241,18 @@ constructor TALabel.Create(const ATitle: String);
 begin
   inherited Create;
   FTitle := ATitle;
+end;
+
+{ TAEntry -------------------------------------------------------------------- }
+
+procedure TAEntry.InitBackend;
+begin
+  if BackendInitialized then
+    Exit;
+
+  FGtkWidget := gtk_entry_new;
+  { Should be always last in InitBackend }
+  inherited InitBackend;
 end;
 
 { TABox ---------------------------------------------------------------------- }
