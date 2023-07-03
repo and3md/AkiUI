@@ -585,7 +585,14 @@ procedure TAWindow.InitBackend;
 begin
   if FState = wsNotInitialized then
   begin
-    FGtkWindow := gtk_application_window_new(Application.FGtkApp);
+    { Run gtk_application_window_new() only for top level window. }
+    if FApplication.FMainWindow = Self then
+      FGtkWindow := gtk_application_window_new(Application.FGtkApp)
+    else
+    begin
+      FGtkWindow := gtk_window_new;
+      gtk_window_set_application(PGtkWindow(FGtkWindow), Application.FGtkApp);
+    end;
     gtk_window_set_title(PGtkWindow(FGtkWindow), Pgchar(FTitle));
     gtk_window_set_default_size(PGtkWindow(FGtkWindow), FWidth, FHeight);
     g_signal_connect_data(FGtkWindow, 'destroy', TGCallback(@destroy_TAWindow), Self, nil, 0);
